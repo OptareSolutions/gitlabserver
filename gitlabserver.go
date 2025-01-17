@@ -97,8 +97,8 @@ func (g GitlabServer) UserCount() (int, error) {
 	return count, nil
 }
 
-// GitlabProjects returns a slice with all the projects in gitlab
-func (g GitlabServer) GitlabProjects() ([]*gitlab.Project, error) {
+// Projects returns a slice with all the projects in gitlab
+func (g GitlabServer) Projects() ([]*gitlab.Project, error) {
 	projectCount, err := g.ProjectCount()
 	if err != nil {
 		return nil, err
@@ -146,8 +146,8 @@ func (g GitlabServer) GitlabProjects() ([]*gitlab.Project, error) {
 	return projects, nil
 }
 
-// GitlabGroups returns a slice with all the groups in gitlab
-func (g GitlabServer) GitlabGroups(gitlabAPI *gitlab.Client, token string) ([]*gitlab.Group, error) {
+// Groups returns a slice with all the groups in gitlab
+func (g GitlabServer) Groups() ([]*gitlab.Group, error) {
 	groupCount, err := g.GroupCount()
 	if err != nil {
 		return nil, err
@@ -219,4 +219,78 @@ func (g GitlabServer) GetLatestCommit(p *gitlab.Project) (string, error) {
 	}
 
 	return commits[0].ID, nil
+}
+
+// ProjectExists returns a boolean whether the project exists or not
+func (g GitlabServer) ProjectExists(gid int, projectName string) (bool, *gitlab.Response, error) {
+	// search project name within all projects of group
+	listGroupProjectsOptions := &gitlab.ListGroupProjectsOptions{
+		ListOptions:      gitlab.ListOptions{PerPage: ITEMS_PER_PAGE, Page: 1},
+		OrderBy:          &[]string{"name"}[0],
+		Sort:             &[]string{"asc"}[0],
+		IncludeSubGroups: &[]bool{false}[0],
+		Search:           &projectName,
+	}
+
+	gitlabProjects, resp, err := g.client.Groups.ListGroupProjects(gid, listGroupProjectsOptions, nil)
+	if err != nil {
+		return false, resp, err
+	}
+
+	if len(gitlabProjects) == 0 {
+		return false, nil, nil
+	}
+
+	// check if there is a project with exact same name as the desired project
+	for _, gitlabProject := range gitlabProjects {
+		if projectName != gitlabProject.Name {
+			return false, nil, nil
+		} else {
+			continue
+		}
+	}
+
+	return true, nil, nil
+}
+
+// GroupExists returns bool if the group already exists
+func (g GitlabServer) GroupExists(gid int) (bool, *gitlab.Response, error) {
+	// if group does not exist, the API returns 404
+	_, resp, err := g.client.Groups.GetGroup(gid, &gitlab.GetGroupOptions{})
+	if err != nil {
+		return false, resp, err
+	}
+
+	return true, nil, nil
+}
+
+// AddMember adds Gitlab's user referenced by "userID" as a member of the project "p" with "accessLevel"
+func (g GitlabServer) AddMember(p *gitlab.Project, userID int, accessLevel *gitlab.AccessLevelValue) (*gitlab.Response, error) {
+	optsMembers := gitlab.AddProjectMemberOptions{
+		UserID:      userID,
+		AccessLevel: accessLevel,
+	}
+
+	_, resp, err := g.client.ProjectMembers.AddProjectMember(p.ID, &optsMembers)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
+}
+
+// AddWebhook adds a webhook to the project pointing to the URL of "webhook"
+func (g GitlabServer) AddWebhook(gitlabAPI *gitlab.Client, webhook string, p *gitlab.Project) (*gitlab.Response, error) {
+	optsHook := gitlab.AddProjectHookOptions{
+		EnableSSLVerification: &[]bool{true}[0],
+		PushEvents:            &[]bool{true}[0],
+		URL:                   &[]string{webhook}[0],
+	}
+
+	_, resp, err := gitlabAPI.Projects.AddProjectHook(p.ID, &optsHook)
+	if err != nil {
+		return resp, err
+	}
+
+	return resp, nil
 }
