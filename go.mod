@@ -2,7 +2,7 @@ module github.com/OptareSolutions/gitlabserver
 
 go 1.23.4
 
-require gitlab.com/gitlab-org/api/client-go v0.119.0
+require gitlab.com/gitlab-org/api/client-go v0.121.0
 
 require (
 	github.com/google/go-querystring v1.1.0 // indirect
